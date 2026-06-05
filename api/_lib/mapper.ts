@@ -1,4 +1,4 @@
-import type { JoinRequestRow, TaxiPotRow } from './supabase';
+import type { JoinRequestRow, TaxiPotRow } from './supabase.js';
 
 export interface JoinRequestDto {
   id: string;

@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getStringParam, requireUser, sendError, setCors } from '../_lib/http';
-import { mapJoinRequest, mapTaxiPot } from '../_lib/mapper';
-import { getSupabase, type JoinRequestRow, type TaxiPotRow } from '../_lib/supabase';
+import { getStringParam, requireUser, sendError, setCors } from '../_lib/http.js';
+import { mapJoinRequest, mapTaxiPot } from '../_lib/mapper.js';
+import { getSupabase, type JoinRequestRow, type TaxiPotRow } from '../_lib/supabase.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (setCors(req, res)) return;

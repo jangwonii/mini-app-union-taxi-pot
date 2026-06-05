@@ -1,6 +1,18 @@
 {
   "rewrites": [
     {
+      "source": "/api/pots/:id/join-requests",
+      "destination": "/api/pots/join-requests?potId=:id"
+    },
+    {
+      "source": "/api/pots/:id",
+      "destination": "/api/pots/detail?id=:id"
+    },
+    {
+      "source": "/api/join-requests/:id",
+      "destination": "/api/join-requests/update?id=:id"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }

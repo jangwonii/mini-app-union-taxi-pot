@@ -20,7 +20,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const user = requireUser(req, res);
   if (!user) return;
 
-  const status = typeof getBody(req).status === 'string' ? getBody(req).status : '';
+  const body = getBody(req);
+  const status = typeof body.status === 'string' ? body.status : '';
   if (status !== 'accepted' && status !== 'rejected' && status !== 'canceled') {
     sendError(res, 400, '신청 상태가 올바르지 않습니다.');
     return;

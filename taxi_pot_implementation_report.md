@@ -17,12 +17,12 @@
 **택시팟 API**
 - `GET /api/pots` — 열린 택시팟 목록 조회
 - `POST /api/pots` — 택시팟 생성
-- `GET /api/pots/{id}` — 택시팟 상세 조회
-- `PATCH /api/pots/{id}` — 택시팟 마감 처리
+- `GET /api/pots/detail?id={id}` — 택시팟 상세 조회
+- `PATCH /api/pots/detail?id={id}` — 택시팟 마감 처리
 
 **참여 신청 API**
-- `POST /api/pots/{id}/join-requests` — 택시팟 참여 신청
-- `PATCH /api/join-requests/{id}` — 신청 승인 / 거절 / 취소
+- `POST /api/pots/join-requests?potId={id}` — 택시팟 참여 신청
+- `PATCH /api/join-requests/update?id={id}` — 신청 승인 / 거절 / 취소
 - `GET /api/me/pots` — 내가 만든 택시팟과 내 참여 신청 조회
 
 **검증 로직**

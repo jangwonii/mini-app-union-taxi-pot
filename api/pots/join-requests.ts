@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getBody, getStringParam, requireUser, sendError, sendServerError, setCors } from '../../_lib/http.js';
-import { mapJoinRequest } from '../../_lib/mapper.js';
-import { getSupabase, type JoinRequestRow, type TaxiPotRow } from '../../_lib/supabase.js';
-import { parseJoinMessage } from '../../_lib/validation.js';
+import { getBody, getStringParam, requireUser, sendError, sendServerError, setCors } from '../_lib/http.js';
+import { mapJoinRequest } from '../_lib/mapper.js';
+import { getSupabase, type JoinRequestRow, type TaxiPotRow } from '../_lib/supabase.js';
+import { parseJoinMessage } from '../_lib/validation.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (setCors(req, res)) return;
@@ -12,8 +12,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  const id = getStringParam(req.query.id);
-  if (!id) {
+  const potId = getStringParam(req.query.potId);
+  if (!potId) {
     sendError(res, 400, '택시팟 ID가 필요합니다.');
     return;
   }
@@ -29,7 +29,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const supabase = getSupabase();
-    const { data: pot, error: potError } = await supabase.from('taxi_pots').select('*').eq('id', id).single();
+    const { data: pot, error: potError } = await supabase.from('taxi_pots').select('*').eq('id', potId).single();
     if (potError) throw potError;
 
     const potRow = pot as TaxiPotRow;
@@ -49,7 +49,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { data: acceptedJoinRequests, error: acceptedError } = await supabase
       .from('join_requests')
       .select('id')
-      .eq('pot_id', id)
+      .eq('pot_id', potId)
       .eq('status', 'accepted');
     if (acceptedError) throw acceptedError;
 
@@ -61,7 +61,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { data, error } = await supabase
       .from('join_requests')
       .insert({
-        pot_id: id,
+        pot_id: potId,
         requester_user_id: user.userId,
         requester_nickname: user.nickname,
         message: parsed.value,

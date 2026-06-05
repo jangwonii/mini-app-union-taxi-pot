@@ -21,7 +21,8 @@ export async function listPots(
 }
 
 export async function getPot(user: UserProfile, id: string): Promise<TaxiPot> {
-  const result = await request<{ pot: TaxiPot }>(`/api/pots/${id}?userId=${encodeURIComponent(user.userId)}`, 'GET', user);
+  const params = new URLSearchParams({ id, userId: user.userId });
+  const result = await request<{ pot: TaxiPot }>(`/api/pots/detail?${params.toString()}`, 'GET', user);
   return result.pot;
 }
 
@@ -31,13 +32,13 @@ export async function createPot(user: UserProfile, values: TaxiPotFormValues): P
 }
 
 export async function closePot(user: UserProfile, id: string): Promise<TaxiPot> {
-  const result = await request<{ pot: TaxiPot }>(`/api/pots/${id}`, 'PATCH', user, { status: 'closed' });
+  const result = await request<{ pot: TaxiPot }>(`/api/pots/detail?id=${encodeURIComponent(id)}`, 'PATCH', user, { status: 'closed' });
   return result.pot;
 }
 
 export async function requestToJoinPot(user: UserProfile, potId: string, message: string): Promise<JoinRequest> {
   const result = await request<{ joinRequest: JoinRequest }>(
-    `/api/pots/${potId}/join-requests`,
+    `/api/pots/join-requests?potId=${encodeURIComponent(potId)}`,
     'POST',
     user,
     { message },
@@ -51,7 +52,7 @@ export async function updateJoinRequest(
   status: JoinRequestStatus,
 ): Promise<JoinRequest> {
   const result = await request<{ joinRequest: JoinRequest }>(
-    `/api/join-requests/${joinRequestId}`,
+    `/api/join-requests/update?id=${encodeURIComponent(joinRequestId)}`,
     'PATCH',
     user,
     { status },

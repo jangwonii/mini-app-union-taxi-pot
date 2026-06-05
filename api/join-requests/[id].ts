@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getBody, getStringParam, requireUser, sendError, setCors } from '../_lib/http.js';
+import { getBody, getStringParam, requireUser, sendError, sendServerError, setCors } from '../_lib/http.js';
 import { mapJoinRequest } from '../_lib/mapper.js';
 import { getSupabase, type JoinRequestRow, type TaxiPotRow } from '../_lib/supabase.js';
 
@@ -85,6 +85,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     res.status(200).json({ joinRequest: mapJoinRequest(data as JoinRequestRow) });
   } catch (error) {
-    sendError(res, 500, error instanceof Error ? error.message : '서버 오류가 발생했습니다.');
+    sendServerError(res, error);
   }
 }

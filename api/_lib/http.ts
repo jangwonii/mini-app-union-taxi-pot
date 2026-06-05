@@ -23,6 +23,12 @@ export function sendError(res: VercelResponse, statusCode: number, message: stri
   res.status(statusCode).json({ error: message });
 }
 
+export function sendServerError(res: VercelResponse, error: unknown): void {
+  const message = getErrorMessage(error);
+  console.error('[api:error]', message, error);
+  sendError(res, 500, message);
+}
+
 export function requireUser(req: VercelRequest, res: VercelResponse): UserContext | null {
   const userId = getHeader(req, 'x-union-user-id');
   const nicknameHeader = getHeader(req, 'x-union-nickname');
@@ -65,4 +71,13 @@ function safeDecode(value: string): string {
   } catch {
     return value;
   }
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === 'object' && 'message' in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string' && message) return message;
+  }
+  return '서버 오류가 발생했습니다.';
 }

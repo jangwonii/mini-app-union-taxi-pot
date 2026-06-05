@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getBody, getStringParam, requireUser, sendError, setCors } from '../_lib/http.js';
+import { getBody, getStringParam, requireUser, sendError, sendServerError, setCors } from '../_lib/http.js';
 import { mapTaxiPot } from '../_lib/mapper.js';
 import { getSupabase, type JoinRequestRow, type TaxiPotRow } from '../_lib/supabase.js';
 import { parseTaxiPotInput } from '../_lib/validation.js';
@@ -106,7 +106,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     sendError(res, 405, '지원하지 않는 메서드입니다.');
   } catch (error) {
-    sendError(res, 500, error instanceof Error ? error.message : '서버 오류가 발생했습니다.');
+    sendServerError(res, error);
   }
 }
 

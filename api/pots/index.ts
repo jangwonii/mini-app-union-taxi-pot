@@ -9,10 +9,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     if (req.method === 'GET') {
-      const userId = getStringParam(req.query.userId);
+      const user = requireUser(req, res);
+      if (!user) return;
       const search = getStringParam(req.query.q)?.toLowerCase() ?? '';
       const tag = getStringParam(req.query.tag);
       const time = getStringParam(req.query.time);
+      const sort = getStringParam(req.query.sort);
       const supabase = getSupabase();
 
       let query = supabase
@@ -53,10 +55,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const potJoinRequests = joinRequestRows.filter((joinRequest) => joinRequest.pot_id === pot.id);
         const acceptedCount = potJoinRequests.filter((joinRequest) => joinRequest.status === 'accepted').length;
         const pendingCount = potJoinRequests.filter((joinRequest) => joinRequest.status === 'pending').length;
-        const myJoinRequest = userId
-          ? potJoinRequests.find((joinRequest) => joinRequest.requester_user_id === userId) ?? null
-          : null;
-        const canSeeOpenChat = pot.owner_user_id === userId || myJoinRequest?.status === 'accepted';
+        const myJoinRequest = potJoinRequests.find((joinRequest) => joinRequest.requester_user_id === user.userId) ?? null;
+        const canSeeOpenChat = pot.owner_user_id === user.userId || myJoinRequest?.status === 'accepted';
 
         return mapTaxiPot(pot, {
           acceptedCount,
@@ -64,6 +64,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           myJoinRequest,
           includeOpenChatUrl: canSeeOpenChat,
         });
+      });
+
+      response.sort((a, b) => {
+        if (sort === 'savings') return b.fullSavings - a.fullSavings;
+        if (sort === 'seats') return (b.maxRiders - b.currentRiders) - (a.maxRiders - a.currentRiders);
+        return new Date(a.departureTime).getTime() - new Date(b.departureTime).getTime();
       });
 
       res.status(200).json({ pots: response });

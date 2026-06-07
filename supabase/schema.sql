@@ -29,10 +29,24 @@ create table if not exists public.join_requests (
   unique (pot_id, requester_user_id)
 );
 
+create table if not exists public.taxi_notifications (
+  id uuid primary key default gen_random_uuid(),
+  user_id text not null,
+  pot_id uuid references public.taxi_pots(id) on delete cascade,
+  join_request_id uuid references public.join_requests(id) on delete set null,
+  type text not null check (type in ('join_requested', 'join_accepted', 'join_rejected', 'join_canceled', 'pot_closed')),
+  title text not null check (char_length(title) between 1 and 120),
+  message text not null check (char_length(message) between 1 and 500),
+  is_read boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
 create index if not exists taxi_pots_status_departure_time_idx on public.taxi_pots (status, departure_time asc);
 create index if not exists taxi_pots_tags_idx on public.taxi_pots using gin (tags);
 create index if not exists join_requests_pot_id_status_idx on public.join_requests (pot_id, status);
 create index if not exists join_requests_requester_user_id_idx on public.join_requests (requester_user_id);
+create index if not exists taxi_notifications_user_read_created_idx on public.taxi_notifications (user_id, is_read, created_at desc);
+create index if not exists taxi_notifications_pot_id_idx on public.taxi_notifications (pot_id);
 
 create or replace function public.set_updated_at()
 returns trigger as $$

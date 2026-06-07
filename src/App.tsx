@@ -1,17 +1,29 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, MouseEvent, useEffect, useMemo, useState } from 'react';
 import Union from '@union-miniapp/sdk';
 import {
   closePot,
   createPot,
   getMyPots,
   getPot,
+  listNotifications,
   listPots,
+  markAllNotificationsRead,
+  markNotificationRead,
   requestToJoinPot,
   updateJoinRequest,
 } from './api';
-import type { JoinRequest, JoinRequestStatus, TaxiPot, TaxiPotFormValues, TimeFilter, UserProfile } from './types';
+import type {
+  JoinRequest,
+  JoinRequestStatus,
+  SortMode,
+  TaxiNotification,
+  TaxiPot,
+  TaxiPotFormValues,
+  TimeFilter,
+  UserProfile,
+} from './types';
 
-type Tab = 'home' | 'create' | 'mine';
+type Tab = 'home' | 'create' | 'mine' | 'notifications';
 
 const recommendedTags = ['공항', '터미널', '기숙사', '야간', '등교', '하교', '역'];
 
@@ -27,6 +39,12 @@ const timeFilters: { value: TimeFilter; label: string }[] = [
   { value: 'now', label: '2시간 이내' },
   { value: 'today', label: '오늘' },
   { value: 'tomorrow', label: '내일' },
+];
+
+const sortModes: { value: SortMode; label: string }[] = [
+  { value: 'departure', label: '출발 임박순' },
+  { value: 'savings', label: '절약액순' },
+  { value: 'seats', label: '자리 여유순' },
 ];
 
 function createDefaultForm(): TaxiPotFormValues {
@@ -52,24 +70,29 @@ function App() {
   const [selectedPot, setSelectedPot] = useState<TaxiPot | null>(null);
   const [ownedPots, setOwnedPots] = useState<TaxiPot[]>([]);
   const [myJoinRequests, setMyJoinRequests] = useState<{ joinRequest: JoinRequest; pot: TaxiPot | null }[]>([]);
+  const [notifications, setNotifications] = useState<TaxiNotification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [query, setQuery] = useState('');
   const [activeTag, setActiveTag] = useState('');
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
+  const [sortMode, setSortMode] = useState<SortMode>('departure');
   const [joinMessage, setJoinMessage] = useState('');
   const [form, setForm] = useState<TaxiPotFormValues>(() => createDefaultForm());
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     Union.ui.setNavigationBar({ title: '택시팟', backgroundColor: '#ffffff', textColor: '#111827' });
     Union.analytics.trackPageView('taxi_pot_home');
-    bootstrap();
+    void bootstrap();
   }, []);
 
   useEffect(() => {
     if (!user) return;
-    loadPots();
-  }, [user, activeTag, timeFilter]);
+    void loadPots();
+    void loadNotifications();
+  }, [user, activeTag, timeFilter, sortMode]);
 
   const selectedSlots = useMemo(() => {
     if (!selectedPot) return '';
@@ -81,10 +104,16 @@ function App() {
     try {
       const profile = (await Union.auth.getUserProfile()) as UserProfile;
       setUser(profile);
-      const savedFilter = await Union.storage.get<{ query?: string; tag?: string; time?: TimeFilter }>('taxi_pot_filters');
+      const savedFilter = await Union.storage.get<{
+        query?: string;
+        tag?: string;
+        time?: TimeFilter;
+        sort?: SortMode;
+      }>('taxi_pot_filters');
       if (savedFilter?.query) setQuery(savedFilter.query);
       if (savedFilter?.tag) setActiveTag(savedFilter.tag);
       if (savedFilter?.time) setTimeFilter(savedFilter.time);
+      if (savedFilter?.sort) setSortMode(savedFilter.sort);
     } catch (err) {
       showError(err);
     } finally {
@@ -96,9 +125,9 @@ function App() {
     if (!user) return;
     setError('');
     try {
-      const data = await listPots(user, { q: nextQuery, tag: activeTag, time: timeFilter });
+      const data = await listPots(user, { q: nextQuery, tag: activeTag, time: timeFilter, sort: sortMode });
       setPots(data);
-      await Union.storage.set('taxi_pot_filters', { query: nextQuery, tag: activeTag, time: timeFilter });
+      await Union.storage.set('taxi_pot_filters', { query: nextQuery, tag: activeTag, time: timeFilter, sort: sortMode });
     } catch (err) {
       showError(err);
     }
@@ -107,6 +136,7 @@ function App() {
   async function loadMine() {
     if (!user) return;
     setTab('mine');
+    setError('');
     Union.analytics.trackPageView('taxi_pot_mine');
     try {
       const data = await getMyPots(user);
@@ -117,8 +147,27 @@ function App() {
     }
   }
 
+  async function loadNotifications() {
+    if (!user) return;
+    setError('');
+    try {
+      const data = await listNotifications(user);
+      setNotifications(data.notifications);
+      setUnreadCount(data.unreadCount);
+    } catch (err) {
+      showError(err);
+    }
+  }
+
+  async function openNotifications() {
+    setTab('notifications');
+    Union.analytics.trackPageView('taxi_pot_notifications');
+    await loadNotifications();
+  }
+
   async function openPot(id: string) {
     if (!user) return;
+    setError('');
     try {
       const pot = await getPot(user, id);
       setSelectedPot(pot);
@@ -136,7 +185,8 @@ function App() {
 
   async function handleCreate(event: FormEvent) {
     event.preventDefault();
-    if (!user) return;
+    if (!user || submitting) return;
+    setSubmitting(true);
     try {
       Union.ui.showLoading('택시팟을 만들고 있어요');
       const pot = await createPot(user, form);
@@ -149,12 +199,14 @@ function App() {
     } catch (err) {
       showError(err);
     } finally {
+      setSubmitting(false);
       Union.ui.hideLoading();
     }
   }
 
   async function handleJoin() {
-    if (!user || !selectedPot) return;
+    if (!user || !selectedPot || submitting) return;
+    setSubmitting(true);
     try {
       Union.ui.showLoading('참여 신청을 보내고 있어요');
       await requestToJoinPot(user, selectedPot.id, joinMessage);
@@ -165,12 +217,13 @@ function App() {
     } catch (err) {
       showError(err);
     } finally {
+      setSubmitting(false);
       Union.ui.hideLoading();
     }
   }
 
   async function handleJoinRequest(joinRequestId: string, status: JoinRequestStatus) {
-    if (!user || !selectedPot) return;
+    if (!user || !selectedPot || submitting) return;
     const label = status === 'accepted' ? '승인' : status === 'rejected' ? '거절' : '취소';
     const { confirmed } = await Union.ui.showModal({
       title: `신청 ${label}`,
@@ -180,6 +233,7 @@ function App() {
     });
     if (!confirmed) return;
 
+    setSubmitting(true);
     try {
       await updateJoinRequest(user, joinRequestId, status);
       Union.analytics.trackEvent('taxi_pot_join_status_changed', { status });
@@ -187,13 +241,16 @@ function App() {
       await openPot(selectedPot.id);
       if (tab === 'mine') await loadMine();
       await loadPots();
+      await loadNotifications();
     } catch (err) {
       showError(err);
+    } finally {
+      setSubmitting(false);
     }
   }
 
   async function handleClosePot(pot: TaxiPot) {
-    if (!user) return;
+    if (!user || submitting) return;
     const { confirmed } = await Union.ui.showModal({
       title: '택시팟 마감',
       content: '이 택시팟을 마감할까요?',
@@ -202,15 +259,76 @@ function App() {
     });
     if (!confirmed) return;
 
+    setSubmitting(true);
     try {
       await closePot(user, pot.id);
       Union.ui.showToast({ message: '택시팟을 마감했습니다.' });
       await loadMine();
       await loadPots();
+      await loadNotifications();
       if (selectedPot?.id === pot.id) await openPot(pot.id);
     } catch (err) {
       showError(err);
+    } finally {
+      setSubmitting(false);
     }
+  }
+
+  async function handleNotificationClick(notification: TaxiNotification) {
+    if (!user) return;
+    try {
+      if (!notification.isRead) {
+        await markNotificationRead(user, notification.id);
+        await loadNotifications();
+      }
+      if (notification.potId) await openPot(notification.potId);
+    } catch (err) {
+      showError(err);
+    }
+  }
+
+  async function handleReadAllNotifications() {
+    if (!user) return;
+    try {
+      await markAllNotificationsRead(user);
+      await loadNotifications();
+      Union.ui.showToast({ message: '알림을 모두 읽음 처리했습니다.' });
+    } catch (err) {
+      showError(err);
+    }
+  }
+
+  async function handleOpenChat(event: MouseEvent<HTMLAnchorElement>, url: string) {
+    event.preventDefault();
+    const { confirmed } = await Union.ui.showModal({
+      title: '오픈채팅으로 이동',
+      content: 'Union 밖의 오픈채팅 링크로 이동합니다.',
+      confirmText: '열기',
+      cancelText: '취소',
+    });
+    if (!confirmed) return;
+
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.target = '_blank';
+    anchor.rel = 'noreferrer';
+    anchor.click();
+  }
+
+  async function retryCurrentView() {
+    if (!user) {
+      await bootstrap();
+      return;
+    }
+    if (tab === 'mine') {
+      await loadMine();
+      return;
+    }
+    if (tab === 'notifications') {
+      await loadNotifications();
+      return;
+    }
+    await loadPots();
   }
 
   function showError(err: unknown) {
@@ -238,21 +356,30 @@ function App() {
             <h1>택시팟</h1>
             <span className="hero-mark" aria-hidden="true">🚕</span>
           </div>
-          <p className="hero-copy">같은 방향으로 가는 사람들과 택시비를 나눠 부담하세요.</p>
+          <p className="hero-copy">같은 방향의 캠퍼스 이동을 더 저렴하고 빠르게 모아보세요.</p>
         </div>
-        <div className="profile-chip">{user?.nickname ?? 'Guest'}</div>
+        <div className="hero-actions">
+          <button className="notification-button" onClick={openNotifications} aria-label="알림">
+            <span aria-hidden="true">🔔</span>
+            {unreadCount > 0 && <strong>{unreadCount > 9 ? '9+' : unreadCount}</strong>}
+          </button>
+          <div className="profile-chip">{user?.nickname ?? 'Guest'}</div>
+        </div>
       </header>
 
       {error && (
-        <button className="error-banner" onClick={() => setError('')}>
-          {error}
-        </button>
+        <div className="error-banner">
+          <span>{error}</span>
+          <button onClick={retryCurrentView}>다시 시도</button>
+          <button onClick={() => setError('')} aria-label="오류 닫기">×</button>
+        </div>
       )}
 
       <nav className="tabs" aria-label="택시팟 메뉴">
         <button className={tab === 'home' ? 'active' : ''} onClick={() => setTab('home')}>탐색</button>
         <button className={tab === 'create' ? 'active' : ''} onClick={() => setTab('create')}>팟 만들기</button>
         <button className={tab === 'mine' ? 'active' : ''} onClick={loadMine}>내 택시팟</button>
+        <button className={tab === 'notifications' ? 'active' : ''} onClick={openNotifications}>알림</button>
       </nav>
 
       {tab === 'home' && (
@@ -273,6 +400,17 @@ function App() {
                 onClick={() => setTimeFilter(filter.value)}
               >
                 {filter.label}
+              </button>
+            ))}
+          </div>
+          <div className="segmented sort-segmented" aria-label="목록 정렬">
+            {sortModes.map((mode) => (
+              <button
+                key={mode.value}
+                className={sortMode === mode.value ? 'selected' : ''}
+                onClick={() => setSortMode(mode.value)}
+              >
+                {mode.label}
               </button>
             ))}
           </div>
@@ -384,10 +522,12 @@ function App() {
               />
             </label>
             <div className="fare-preview">
-              <span><span aria-hidden="true">💸</span> 만석 기준 1인 예상</span>
-              <strong>{formatMoney(Math.ceil(form.estimatedFare / form.maxRiders))}</strong>
+              <span><span aria-hidden="true">💸</span> 혼자 대비 만석 절약</span>
+              <strong>{formatMoney(form.estimatedFare - Math.ceil(form.estimatedFare / form.maxRiders))}</strong>
             </div>
-            <button className="primary-button" type="submit"><span aria-hidden="true">🚕</span> 택시팟 등록</button>
+            <button className="primary-button" type="submit" disabled={submitting}>
+              <span aria-hidden="true">🚕</span> 택시팟 등록
+            </button>
           </form>
         </section>
       )}
@@ -422,6 +562,33 @@ function App() {
         </section>
       )}
 
+      {tab === 'notifications' && (
+        <section className="stack">
+          <div className="section-header">
+            <h2>알림</h2>
+            <div className="action-row">
+              <button className="ghost-button small" onClick={loadNotifications}>새로고침</button>
+              {unreadCount > 0 && (
+                <button className="primary-button small" onClick={handleReadAllNotifications}>모두 읽음</button>
+              )}
+            </div>
+          </div>
+          {notifications.length === 0 ? (
+            <EmptyState title="알림이 없어요" body="신청과 승인 소식이 생기면 여기에 모입니다." />
+          ) : (
+            <div className="notification-list">
+              {notifications.map((notification) => (
+                <NotificationCard
+                  key={notification.id}
+                  notification={notification}
+                  onClick={() => handleNotificationClick(notification)}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
       {selectedPot && (
         <PotDetail
           pot={selectedPot}
@@ -431,7 +598,9 @@ function App() {
           setJoinMessage={setJoinMessage}
           onJoin={handleJoin}
           onJoinRequest={handleJoinRequest}
+          onOpenChat={handleOpenChat}
           onClose={() => setSelectedPot(null)}
+          submitting={submitting}
         />
       )}
     </main>
@@ -443,10 +612,17 @@ function PotCard({ pot, onClick }: { pot: TaxiPot; onClick: () => void }) {
     <button className="pot-card" onClick={onClick}>
       <div className="card-top">
         <span><span aria-hidden="true">🚕</span> {formatDateTime(pot.departureTime)}</span>
-        <StatusPill status={pot.status} />
+        <div className="pill-row">
+          {pot.isLeavingSoon && <span className="urgent-pill">곧 출발</span>}
+          <StatusPill status={pot.status} />
+        </div>
       </div>
       <RouteTitle start={pot.startLocation} destination={pot.destination} />
       <p>{pot.description}</p>
+      <div className="savings-strip">
+        <span>혼자 대비 절약</span>
+        <strong>{formatMoney(pot.fullSavings)}</strong>
+      </div>
       <div className="meta-row">
         <span>{pot.currentRiders}/{pot.maxRiders}명</span>
         <span>현재 {formatMoney(pot.estimatedCurrentShare)}</span>
@@ -465,7 +641,9 @@ function PotDetail({
   setJoinMessage,
   onJoin,
   onJoinRequest,
+  onOpenChat,
   onClose,
+  submitting,
 }: {
   pot: TaxiPot;
   userId: string;
@@ -474,7 +652,9 @@ function PotDetail({
   setJoinMessage: (message: string) => void;
   onJoin: () => void;
   onJoinRequest: (joinRequestId: string, status: JoinRequestStatus) => void;
+  onOpenChat: (event: MouseEvent<HTMLAnchorElement>, url: string) => void;
   onClose: () => void;
+  submitting: boolean;
 }) {
   const isOwner = pot.ownerUserId === userId;
   const isFull = pot.currentRiders >= pot.maxRiders;
@@ -497,11 +677,22 @@ function PotDetail({
         <Metric label="만석 1인" value={formatMoney(pot.estimatedFullShare)} icon="🚕" />
       </div>
 
+      <div className="savings-panel">
+        <div>
+          <span>현재 절약액</span>
+          <strong>{formatMoney(pot.currentSavings)}</strong>
+        </div>
+        <div>
+          <span>만석 시 추가 절약</span>
+          <strong>{formatMoney(pot.additionalSavingsToFull)}</strong>
+        </div>
+      </div>
+
       <p className="detail-copy">{pot.description}</p>
       <Tags tags={pot.tags} />
 
       {pot.openChatUrl && (
-        <a className="open-chat" href={pot.openChatUrl} target="_blank" rel="noreferrer">
+        <a className="open-chat" href={pot.openChatUrl} onClick={(event) => onOpenChat(event, pot.openChatUrl!)}>
           <span aria-hidden="true">💬</span> 오픈채팅 열기
         </a>
       )}
@@ -527,14 +718,14 @@ function PotDetail({
               placeholder="예: 10분 전 도착 가능해요."
             />
           </label>
-          <button className="primary-button sticky-action" onClick={onJoin} disabled={joinMessage.trim().length < 2}>
+          <button className="primary-button sticky-action" onClick={onJoin} disabled={submitting || joinMessage.trim().length < 2}>
             <span aria-hidden="true">🚕</span> 참여 신청
           </button>
         </div>
       )}
 
       {canCancel && pot.myJoinRequest && (
-        <button className="ghost-button full-width" onClick={() => onJoinRequest(pot.myJoinRequest!.id, 'canceled')}>
+        <button className="ghost-button full-width" onClick={() => onJoinRequest(pot.myJoinRequest!.id, 'canceled')} disabled={submitting}>
           신청 취소
         </button>
       )}
@@ -555,8 +746,8 @@ function PotDetail({
                 </div>
                 {joinRequest.status === 'pending' && (
                   <div className="action-row">
-                    <button className="ghost-button small" onClick={() => onJoinRequest(joinRequest.id, 'rejected')}>거절</button>
-                    <button className="primary-button small" onClick={() => onJoinRequest(joinRequest.id, 'accepted')}>승인</button>
+                    <button className="ghost-button small" onClick={() => onJoinRequest(joinRequest.id, 'rejected')} disabled={submitting}>거절</button>
+                    <button className="primary-button small" onClick={() => onJoinRequest(joinRequest.id, 'accepted')} disabled={submitting}>승인</button>
                   </div>
                 )}
               </div>
@@ -582,6 +773,7 @@ function MineCard({ pot, onOpen, onClose }: { pot: TaxiPot; onOpen: () => void; 
         <div className="meta-row">
           <span>{pot.currentRiders}/{pot.maxRiders}명</span>
           <span>{pot.pendingCount}건 대기</span>
+          <span>{formatMoney(pot.fullSavings)} 절약</span>
         </div>
       </div>
       <div className="action-row">
@@ -608,7 +800,26 @@ function RequestSummary({
         <span className="request-badge">{statusLabels[joinRequest.status]}</span>
       </div>
       <h3>{pot ? `${pot.startLocation} → ${pot.destination}` : '택시팟을 찾을 수 없어요'}</h3>
+      {pot && <span className="link-hint">{formatMoney(pot.fullSavings)}까지 절약 가능</span>}
       {pot?.openChatUrl && <span className="link-hint">오픈채팅 공개됨</span>}
+    </button>
+  );
+}
+
+function NotificationCard({
+  notification,
+  onClick,
+}: {
+  notification: TaxiNotification;
+  onClick: () => void;
+}) {
+  return (
+    <button className={`notification-card ${notification.isRead ? 'read' : 'unread'}`} onClick={onClick}>
+      <div>
+        <strong>{notification.title}</strong>
+        <p>{notification.message}</p>
+      </div>
+      <span>{formatRelativeTime(notification.createdAt)}</span>
     </button>
   );
 }
@@ -669,6 +880,9 @@ function formatMoney(value: number) {
 
 function formatErrorMessage(err: unknown) {
   const message = err instanceof Error ? err.message : '문제가 발생했습니다.';
+  if (message.includes('Union 인증 토큰') || message.includes('401')) {
+    return 'Union 인증이 필요합니다. 앱에서 다시 열어주세요.';
+  }
   if (message.includes("body stream already read") || message.includes("Failed to execute 'text' on 'Response'")) {
     return 'API 서버 연결이 필요합니다. Vercel dev 또는 배포 API 주소를 확인해주세요.';
   }
@@ -682,6 +896,15 @@ function formatDateTime(value: string) {
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(value));
+}
+
+function formatRelativeTime(value: string) {
+  const diffMinutes = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 60000));
+  if (diffMinutes < 1) return '방금';
+  if (diffMinutes < 60) return `${diffMinutes}분 전`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}시간 전`;
+  return new Intl.DateTimeFormat('ko-KR', { month: 'short', day: 'numeric' }).format(new Date(value));
 }
 
 function toDateTimeInputValue(value: Date) {

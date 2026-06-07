@@ -1,5 +1,14 @@
 import Union from '@union-miniapp/sdk';
-import type { JoinRequest, JoinRequestStatus, TaxiPot, TaxiPotFormValues, TimeFilter, UserProfile } from './types';
+import type {
+  JoinRequest,
+  JoinRequestStatus,
+  SortMode,
+  TaxiNotification,
+  TaxiPot,
+  TaxiPotFormValues,
+  TimeFilter,
+  UserProfile,
+} from './types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -10,18 +19,19 @@ interface ApiResult<T> {
 
 export async function listPots(
   user: UserProfile,
-  filters: { q?: string; tag?: string; time?: TimeFilter },
+  filters: { q?: string; tag?: string; time?: TimeFilter; sort?: SortMode },
 ): Promise<TaxiPot[]> {
-  const params = new URLSearchParams({ userId: user.userId });
+  const params = new URLSearchParams();
   if (filters.q) params.set('q', filters.q);
   if (filters.tag) params.set('tag', filters.tag);
   if (filters.time && filters.time !== 'all') params.set('time', filters.time);
+  if (filters.sort && filters.sort !== 'departure') params.set('sort', filters.sort);
   const result = await request<{ pots: TaxiPot[] }>(`/api/pots?${params.toString()}`, 'GET', user);
   return result.pots;
 }
 
 export async function getPot(user: UserProfile, id: string): Promise<TaxiPot> {
-  const params = new URLSearchParams({ id, userId: user.userId });
+  const params = new URLSearchParams({ id });
   const result = await request<{ pot: TaxiPot }>(`/api/pots/detail?${params.toString()}`, 'GET', user);
   return result.pot;
 }
@@ -32,7 +42,7 @@ export async function createPot(user: UserProfile, values: TaxiPotFormValues): P
 }
 
 export async function closePot(user: UserProfile, id: string): Promise<TaxiPot> {
-  const result = await request<{ pot: TaxiPot }>(`/api/pots/detail?id=${encodeURIComponent(id)}`, 'PATCH', user, { status: 'closed' });
+  const result = await request<{ pot: TaxiPot }>(`/api/pots/detail?id=${encodeURIComponent(id)}`, 'PUT', user, { status: 'closed' });
   return result.pot;
 }
 
@@ -53,7 +63,7 @@ export async function updateJoinRequest(
 ): Promise<JoinRequest> {
   const result = await request<{ joinRequest: JoinRequest }>(
     `/api/join-requests/update?id=${encodeURIComponent(joinRequestId)}`,
-    'PATCH',
+    'PUT',
     user,
     { status },
   );
@@ -64,20 +74,42 @@ export async function getMyPots(user: UserProfile): Promise<{
   ownedPots: TaxiPot[];
   joinRequests: { joinRequest: JoinRequest; pot: TaxiPot | null }[];
 }> {
-  return request(`/api/me/pots?userId=${encodeURIComponent(user.userId)}`, 'GET', user);
+  return request('/api/me/pots', 'GET', user);
+}
+
+export async function listNotifications(user: UserProfile): Promise<{
+  notifications: TaxiNotification[];
+  unreadCount: number;
+}> {
+  return request('/api/notifications', 'GET', user);
+}
+
+export async function markNotificationRead(user: UserProfile, id: string): Promise<TaxiNotification> {
+  const result = await request<{ notification: TaxiNotification }>(
+    `/api/notifications/update?id=${encodeURIComponent(id)}`,
+    'PUT',
+    user,
+  );
+  return result.notification;
+}
+
+export async function markAllNotificationsRead(user: UserProfile): Promise<void> {
+  await request<{ ok: boolean }>('/api/notifications/update', 'PUT', user, { readAll: true });
 }
 
 async function request<T>(
   path: string,
-  method: 'GET' | 'POST' | 'PATCH',
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
   user: UserProfile,
   body?: unknown,
 ): Promise<T> {
   const url = `${API_BASE_URL}${path}`;
+  const accessToken = await Union.auth.getAccessToken();
   const result = (await Union.request({
     url,
-    method: method as any,
+    method,
     headers: {
+      Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
       'X-Union-User-Id': user.userId,
       'X-Union-Nickname': encodeURIComponent(user.nickname),

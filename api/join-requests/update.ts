@@ -1,12 +1,13 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getBody, getStringParam, requireUser, sendError, sendServerError, setCors } from '../_lib/http.js';
 import { mapJoinRequest } from '../_lib/mapper.js';
+import { createTaxiNotification } from '../_lib/notifications.js';
 import { getSupabase, type JoinRequestRow, type TaxiPotRow } from '../_lib/supabase.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (setCors(req, res)) return;
 
-  if (req.method !== 'PATCH') {
+  if (req.method !== 'PUT') {
     sendError(res, 405, '지원하지 않는 메서드입니다.');
     return;
   }
@@ -84,7 +85,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .single();
     if (error) throw error;
 
-    res.status(200).json({ joinRequest: mapJoinRequest(data as JoinRequestRow) });
+    const updatedJoinRequest = data as JoinRequestRow;
+    if (status === 'accepted' || status === 'rejected') {
+      await createTaxiNotification(supabase, {
+        userId: joinRequestRow.requester_user_id,
+        potId: potRow.id,
+        joinRequestId: joinRequestRow.id,
+        type: status === 'accepted' ? 'join_accepted' : 'join_rejected',
+        title: status === 'accepted' ? '참여 신청이 승인됐어요' : '참여 신청이 거절됐어요',
+        message: `${potRow.start_location} → ${potRow.destination} 택시팟 신청 결과를 확인하세요.`,
+      });
+    }
+
+    if (status === 'canceled') {
+      await createTaxiNotification(supabase, {
+        userId: potRow.owner_user_id,
+        potId: potRow.id,
+        joinRequestId: joinRequestRow.id,
+        type: 'join_canceled',
+        title: '참여 신청이 취소됐어요',
+        message: `${joinRequestRow.requester_nickname}님이 ${potRow.start_location} → ${potRow.destination} 신청을 취소했습니다.`,
+      });
+    }
+
+    res.status(200).json({ joinRequest: mapJoinRequest(updatedJoinRequest) });
   } catch (error) {
     sendServerError(res, error);
   }

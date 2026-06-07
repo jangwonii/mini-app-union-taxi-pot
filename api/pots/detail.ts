@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getBody, getStringParam, requireUser, sendError, sendServerError, setCors } from '../_lib/http.js';
 import { mapTaxiPot } from '../_lib/mapper.js';
+import { createTaxiNotification } from '../_lib/notifications.js';
 import { getSupabase, type JoinRequestRow, type TaxiPotRow } from '../_lib/supabase.js';
 import { parseTaxiPotInput } from '../_lib/validation.js';
 
@@ -17,7 +18,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const supabase = getSupabase();
 
     if (req.method === 'GET') {
-      const userId = getStringParam(req.query.userId);
+      const user = requireUser(req, res);
+      if (!user) return;
       const { data: pot, error } = await supabase.from('taxi_pots').select('*').eq('id', id).single();
       if (error) throw error;
 
@@ -32,10 +34,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const joinRequestRows = (joinRequests ?? []) as JoinRequestRow[];
       const acceptedCount = joinRequestRows.filter((joinRequest) => joinRequest.status === 'accepted').length;
       const pendingCount = joinRequestRows.filter((joinRequest) => joinRequest.status === 'pending').length;
-      const myJoinRequest = userId
-        ? joinRequestRows.find((joinRequest) => joinRequest.requester_user_id === userId) ?? null
-        : null;
-      const isOwner = potRow.owner_user_id === userId;
+      const myJoinRequest = joinRequestRows.find((joinRequest) => joinRequest.requester_user_id === user.userId) ?? null;
+      const isOwner = potRow.owner_user_id === user.userId;
       const canSeeOpenChat = isOwner || myJoinRequest?.status === 'accepted';
 
       res.status(200).json({
@@ -50,7 +50,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return;
     }
 
-    if (req.method === 'PATCH') {
+    if (req.method === 'PUT') {
       const user = requireUser(req, res);
       if (!user) return;
 
@@ -98,6 +98,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .select('*')
         .single();
       if (error) throw error;
+
+      if (potRow.status !== 'closed' && nextStatus === 'closed') {
+        const { data: relatedRequests, error: relatedError } = await supabase
+          .from('join_requests')
+          .select('*')
+          .eq('pot_id', id)
+          .in('status', ['pending', 'accepted']);
+        if (relatedError) throw relatedError;
+
+        await Promise.all(
+          ((relatedRequests ?? []) as JoinRequestRow[]).map((joinRequest) =>
+            createTaxiNotification(supabase, {
+              userId: joinRequest.requester_user_id,
+              potId: id,
+              joinRequestId: joinRequest.id,
+              type: 'pot_closed',
+              title: '택시팟이 마감됐어요',
+              message: `${potRow.start_location} → ${potRow.destination} 택시팟이 마감됐습니다.`,
+            }),
+          ),
+        );
+      }
 
       res.status(200).json({ pot: mapTaxiPot(data as TaxiPotRow, { includeOpenChatUrl: true }) });
       return;

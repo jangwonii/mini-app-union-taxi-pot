@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getBody, getStringParam, requireUser, sendError, sendServerError, setCors } from '../_lib/http.js';
 import { mapJoinRequest } from '../_lib/mapper.js';
+import { createTaxiNotification } from '../_lib/notifications.js';
 import { getSupabase, type JoinRequestRow, type TaxiPotRow } from '../_lib/supabase.js';
 import { parseJoinMessage } from '../_lib/validation.js';
 
@@ -77,7 +78,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       throw error;
     }
 
-    res.status(201).json({ joinRequest: mapJoinRequest(data as JoinRequestRow) });
+    const joinRequest = data as JoinRequestRow;
+    await createTaxiNotification(supabase, {
+      userId: potRow.owner_user_id,
+      potId,
+      joinRequestId: joinRequest.id,
+      type: 'join_requested',
+      title: '새 참여 신청이 왔어요',
+      message: `${user.nickname}님이 ${potRow.start_location} → ${potRow.destination} 택시팟에 신청했습니다.`,
+    });
+
+    res.status(201).json({ joinRequest: mapJoinRequest(joinRequest) });
   } catch (error) {
     sendServerError(res, error);
   }

@@ -28,6 +28,18 @@ export interface JoinRequestRow {
   updated_at: string;
 }
 
+export interface TaxiNotificationRow {
+  id: string;
+  user_id: string;
+  pot_id: string | null;
+  join_request_id: string | null;
+  type: 'join_requested' | 'join_accepted' | 'join_rejected' | 'join_canceled' | 'pot_closed';
+  title: string;
+  message: string;
+  is_read: boolean;
+  created_at: string;
+}
+
 export function getSupabase() {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;

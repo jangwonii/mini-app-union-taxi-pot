@@ -83,8 +83,8 @@ function App() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    Union.ui.setNavigationBar({ title: '택시팟', backgroundColor: '#ffffff', textColor: '#111827' });
-    Union.analytics.trackPageView('taxi_pot_home');
+    safeUnionCall(() => Union.ui.setNavigationBar({ title: '택시팟', backgroundColor: '#ffffff', textColor: '#111827' }));
+    safeUnionCall(() => Union.analytics.trackPageView('taxi_pot_home'));
     void bootstrap();
   }, []);
 
@@ -137,7 +137,7 @@ function App() {
     if (!user) return;
     setTab('mine');
     setError('');
-    Union.analytics.trackPageView('taxi_pot_mine');
+    safeUnionCall(() => Union.analytics.trackPageView('taxi_pot_mine'));
     try {
       const data = await getMyPots(user);
       setOwnedPots(data.ownedPots);
@@ -161,7 +161,7 @@ function App() {
 
   async function openNotifications() {
     setTab('notifications');
-    Union.analytics.trackPageView('taxi_pot_notifications');
+    safeUnionCall(() => Union.analytics.trackPageView('taxi_pot_notifications'));
     await loadNotifications();
   }
 
@@ -172,7 +172,7 @@ function App() {
       const pot = await getPot(user, id);
       setSelectedPot(pot);
       setJoinMessage('');
-      Union.analytics.trackEvent('taxi_pot_detail_opened', { potId: id });
+      safeUnionCall(() => Union.analytics.trackEvent('taxi_pot_detail_opened', { potId: id }));
     } catch (err) {
       showError(err);
     }
@@ -188,10 +188,10 @@ function App() {
     if (!user || submitting) return;
     setSubmitting(true);
     try {
-      Union.ui.showLoading('택시팟을 만들고 있어요');
+      safeUnionCall(() => Union.ui.showLoading('택시팟을 만들고 있어요'));
       const pot = await createPot(user, form);
-      Union.analytics.trackEvent('taxi_pot_created', { potId: pot.id, maxRiders: pot.maxRiders });
-      Union.ui.showToast({ message: '택시팟을 만들었습니다.' });
+      safeUnionCall(() => Union.analytics.trackEvent('taxi_pot_created', { potId: pot.id, maxRiders: pot.maxRiders }));
+      safeUnionCall(() => Union.ui.showToast({ message: '택시팟을 만들었습니다.' }));
       setForm(createDefaultForm());
       setTab('home');
       await loadPots();
@@ -200,7 +200,7 @@ function App() {
       showError(err);
     } finally {
       setSubmitting(false);
-      Union.ui.hideLoading();
+      safeUnionCall(() => Union.ui.hideLoading());
     }
   }
 
@@ -208,17 +208,17 @@ function App() {
     if (!user || !selectedPot || submitting) return;
     setSubmitting(true);
     try {
-      Union.ui.showLoading('참여 신청을 보내고 있어요');
+      safeUnionCall(() => Union.ui.showLoading('참여 신청을 보내고 있어요'));
       await requestToJoinPot(user, selectedPot.id, joinMessage);
-      Union.analytics.trackEvent('taxi_pot_join_requested', { potId: selectedPot.id });
-      Union.ui.showToast({ message: '참여 신청을 보냈습니다.' });
+      safeUnionCall(() => Union.analytics.trackEvent('taxi_pot_join_requested', { potId: selectedPot.id }));
+      safeUnionCall(() => Union.ui.showToast({ message: '참여 신청을 보냈습니다.' }));
       await openPot(selectedPot.id);
       await loadPots();
     } catch (err) {
       showError(err);
     } finally {
       setSubmitting(false);
-      Union.ui.hideLoading();
+      safeUnionCall(() => Union.ui.hideLoading());
     }
   }
 
@@ -236,8 +236,8 @@ function App() {
     setSubmitting(true);
     try {
       await updateJoinRequest(user, joinRequestId, status);
-      Union.analytics.trackEvent('taxi_pot_join_status_changed', { status });
-      Union.ui.showToast({ message: `신청을 ${label}했습니다.` });
+      safeUnionCall(() => Union.analytics.trackEvent('taxi_pot_join_status_changed', { status }));
+      safeUnionCall(() => Union.ui.showToast({ message: `신청을 ${label}했습니다.` }));
       await openPot(selectedPot.id);
       if (tab === 'mine') await loadMine();
       await loadPots();
@@ -262,7 +262,7 @@ function App() {
     setSubmitting(true);
     try {
       await closePot(user, pot.id);
-      Union.ui.showToast({ message: '택시팟을 마감했습니다.' });
+      safeUnionCall(() => Union.ui.showToast({ message: '택시팟을 마감했습니다.' }));
       await loadMine();
       await loadPots();
       await loadNotifications();
@@ -292,7 +292,7 @@ function App() {
     try {
       await markAllNotificationsRead(user);
       await loadNotifications();
-      Union.ui.showToast({ message: '알림을 모두 읽음 처리했습니다.' });
+      safeUnionCall(() => Union.ui.showToast({ message: '알림을 모두 읽음 처리했습니다.' }));
     } catch (err) {
       showError(err);
     }
@@ -334,7 +334,7 @@ function App() {
   function showError(err: unknown) {
     const message = formatErrorMessage(err);
     setError(message);
-    Union.ui.showToast({ message, duration: 'long' });
+    safeUnionCall(() => Union.ui.showToast({ message, duration: 'long' }));
   }
 
   if (loading) {
@@ -887,6 +887,17 @@ function formatErrorMessage(err: unknown) {
     return 'API 서버 연결이 필요합니다. Vercel dev 또는 배포 API 주소를 확인해주세요.';
   }
   return message;
+}
+
+function safeUnionCall(callback: () => unknown) {
+  try {
+    const result = callback();
+    if (result && typeof result === 'object' && 'catch' in result) {
+      void (result as Promise<unknown>).catch(() => undefined);
+    }
+  } catch {
+    // Native bridge calls should not prevent the React UI from rendering.
+  }
 }
 
 function formatDateTime(value: string) {

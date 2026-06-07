@@ -128,10 +128,22 @@ async function request<T>(
 }
 
 async function getUnionIdToken(): Promise<string> {
-  const auth = Union.auth as typeof Union.auth & {
+  const auth = Union.auth as unknown as {
+    bridge?: {
+      invoke: <T>(module: string, action: string, params?: unknown) => Promise<T>;
+    };
     getIdToken?: () => Promise<string>;
+    getAccessToken: () => Promise<string>;
   };
-  return auth.getIdToken ? auth.getIdToken() : auth.getAccessToken();
+  if (auth.getIdToken) return auth.getIdToken();
+
+  try {
+    if (auth.bridge) return await auth.bridge.invoke<string>('auth', 'getIdToken');
+  } catch {
+    // Older Union runtimes only expose getAccessToken, which is a deprecated alias.
+  }
+
+  return auth.getAccessToken();
 }
 
 function normalizePot(values: TaxiPotFormValues) {

@@ -19,7 +19,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  const user = requireUser(req, res);
+  const user = await requireUser(req, res);
   if (!user) return;
 
   const parsed = parseJoinMessage(getBody(req));

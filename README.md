@@ -34,6 +34,9 @@ npm run dev
 SUPABASE_URL=...
 SUPABASE_SERVICE_ROLE_KEY=...
 CORS_ALLOWED_ORIGIN=*
+UNION_JWKS_URL=https://union-api-183092809276.asia-northeast3.run.app/.well-known/jwks.json
+UNION_ISSUER=https://union-api-183092809276.asia-northeast3.run.app
+UNION_AUDIENCE=com.union.taxi-pot
 ```
 
 `SUPABASE_SERVICE_ROLE_KEY`는 서버 환경변수에만 둬야 합니다.
@@ -57,7 +60,11 @@ VITE_API_BASE_URL=https://your-vercel-project.vercel.app
 
 ## 인증
 
-프론트엔드는 `Union.auth.getAccessToken()`으로 받은 토큰을 `Authorization: Bearer ...` 헤더에 담아 API를 호출합니다. 실제 Union 토큰 검증 인프라가 연결되기 전까지 서버는 로컬/mock 환경에서만 mock 토큰 fallback을 허용하고, production에서는 검증되지 않은 요청을 거부합니다.
+프론트엔드는 `Union.auth.getIdToken()`으로 받은 미니앱 전용 ID 토큰을 `Authorization: Bearer ...` 헤더에 담아 API를 호출합니다. 구 SDK 환경에서는 deprecated alias인 `getAccessToken()`을 fallback으로 사용합니다.
+
+서버는 `UNION_JWKS_URL`, `UNION_ISSUER`, `UNION_AUDIENCE`가 모두 설정되면 RS256/JWKS 기반으로 ID 토큰을 검증하고, 사용자 ID는 토큰의 `sub` claim에서 가져옵니다. 닉네임은 `nickname` claim을 사용하며 없으면 `sub` 기반 fallback을 사용합니다. 클라이언트가 보내는 사용자 헤더는 production 인증에 사용하지 않습니다.
+
+`UNION_JWKS_URL`은 publisher 백엔드에서 인증 없이 접근 가능해야 합니다. JWKS 응답이 401이면 ID 토큰 검증도 실패합니다.
 
 ## 빌드와 패키징
 

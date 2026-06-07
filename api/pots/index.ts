@@ -9,7 +9,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     if (req.method === 'GET') {
-      const user = requireUser(req, res);
+      const user = await requireUser(req, res);
       if (!user) return;
       const search = getStringParam(req.query.q)?.toLowerCase() ?? '';
       const tag = getStringParam(req.query.tag);
@@ -77,7 +77,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (req.method === 'POST') {
-      const user = requireUser(req, res);
+      const user = await requireUser(req, res);
       if (!user) return;
 
       const parsed = parseTaxiPotInput(getBody(req));

@@ -1,6 +1,6 @@
 {
   "name": "union-taxi-pot",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,6 +12,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",
     "@union-miniapp/sdk": "file:./vendor/union-sdk/packages/sdk",
+    "jose": "^6.2.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

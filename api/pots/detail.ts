@@ -18,7 +18,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const supabase = getSupabase();
 
     if (req.method === 'GET') {
-      const user = requireUser(req, res);
+      const user = await requireUser(req, res);
       if (!user) return;
       const { data: pot, error } = await supabase.from('taxi_pots').select('*').eq('id', id).single();
       if (error) throw error;
@@ -51,7 +51,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (req.method === 'PUT') {
-      const user = requireUser(req, res);
+      const user = await requireUser(req, res);
       if (!user) return;
 
       const { data: existingPot, error: existingError } = await supabase

@@ -104,15 +104,13 @@ async function request<T>(
   body?: unknown,
 ): Promise<T> {
   const url = `${API_BASE_URL}${path}`;
-  const accessToken = await Union.auth.getAccessToken();
+  const idToken = await getUnionIdToken();
   const result = (await Union.request({
     url,
     method,
     headers: {
-      Authorization: `Bearer ${accessToken}`,
+      Authorization: `Bearer ${idToken}`,
       'Content-Type': 'application/json',
-      'X-Union-User-Id': user.userId,
-      'X-Union-Nickname': encodeURIComponent(user.nickname),
     },
     body,
     timeout: 10000,
@@ -127,6 +125,13 @@ async function request<T>(
   }
 
   return result.data as T;
+}
+
+async function getUnionIdToken(): Promise<string> {
+  const auth = Union.auth as typeof Union.auth & {
+    getIdToken?: () => Promise<string>;
+  };
+  return auth.getIdToken ? auth.getIdToken() : auth.getAccessToken();
 }
 
 function normalizePot(values: TaxiPotFormValues) {

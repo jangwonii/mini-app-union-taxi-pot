@@ -71,11 +71,8 @@ async function verifyUnionToken(token: string): Promise<UserContext | null> {
         jwks = createRemoteJWKSet(new URL(jwksUrlEnv));
       }
 
-      const { payload } = await jwtVerify(token, jwks, {
-        algorithms: ['RS256'],
-        issuer,
-        audience,
-      });
+      const { payload } = await jwtVerify(token, jwks, { issuer, audience });
+      if (payload.token_use !== 'id') return null;
       return userFromTokenPayload(payload);
     } catch (error) {
       console.error('[auth:error]', getErrorMessage(error));

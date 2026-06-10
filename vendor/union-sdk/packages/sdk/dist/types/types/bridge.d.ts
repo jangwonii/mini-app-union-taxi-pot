@@ -38,8 +38,8 @@ export interface BridgeError {
     /** 에러 메시지 */
     message: string;
 }
-export type BridgeModule = 'auth' | 'ui' | 'device' | 'storage' | 'analytics' | 'network';
-export type UnionEvent = 'app:pause' | 'app:resume' | 'app:destroy' | 'auth:expired' | 'auth:revoked' | 'network:online' | 'network:offline';
+export type BridgeModule = 'auth' | 'ui' | 'device' | 'storage' | 'analytics' | 'network' | 'navigation' | 'notification';
+export type UnionEvent = 'app:pause' | 'app:resume' | 'app:destroy' | 'auth:expired' | 'auth:revoked' | 'network:online' | 'network:offline' | 'navigation:didPush' | 'navigation:didPop' | 'notification:received';
 /** Bridge 어댑터 인터페이스 */
 export interface BridgeAdapter {
     /** 메시지 전송 */

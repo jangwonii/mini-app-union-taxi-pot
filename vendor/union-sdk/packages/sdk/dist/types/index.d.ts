@@ -3,9 +3,11 @@ import { UIModule } from './modules/ui';
 import { DeviceModule } from './modules/device';
 import { StorageModule } from './modules/storage';
 import { AnalyticsModule } from './modules/analytics';
+import { NavigationModule } from './modules/navigation';
+import { NotificationModule } from './modules/notification';
 import type { UnionEvent, RequestOptions, RequestResult } from './types';
 export type * from './types';
-export { UnionError } from './core/bridge';
+export { UnionError, UnionErrorCode } from './core/bridge';
 /**
  * Union SDK
  *
@@ -21,8 +23,11 @@ export { UnionError } from './core/bridge';
  * // 토스트 표시
  * Union.ui.showToast({ message: '안녕하세요!' });
  *
- * // HTTP 요청 (mTLS 자동 적용)
- * const result = await Union.request({ url: '/api/data', method: 'GET' });
+ * // 커스텀 이벤트 트래킹
+ * Union.analytics.trackEvent('join_club', { clubId: 'soccer_001' });
+ *
+ * // 전환 이벤트
+ * Union.analytics.trackConversion('ticket_purchase', { value: 5000, currency: 'KRW' });
  * ```
  */
 declare const Union: {
@@ -36,10 +41,14 @@ declare const Union: {
     readonly storage: StorageModule;
     /** 애널리틱스 모듈 */
     readonly analytics: AnalyticsModule;
+    /** 네비게이션 모듈 (네이티브 페이지 스택) */
+    readonly navigation: NavigationModule;
+    /** 알림 모듈 (권한/로컬알림/구독/원격 푸시 수신) */
+    readonly notification: NotificationModule;
     /** HTTP 요청 (mTLS 인증 자동 적용) */
     readonly request: (options: RequestOptions) => Promise<RequestResult>;
     /** SDK 버전 */
-    readonly version: "1.0.0";
+    readonly version: "1.2.0";
     /** 현재 플랫폼 ('ios' | 'android' | 'mock') */
     readonly platform: "ios" | "android" | "mock";
     /** 네이티브 이벤트 구독 */

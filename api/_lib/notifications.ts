@@ -50,6 +50,40 @@ export async function createTaxiNotification(
   if (error) {
     console.error('[notification:error]', error.message, input);
   }
+
+  await sendUnionTargetedNotification(input.userId, input.title, input.message);
+}
+
+// targetUserIds 로 특정 사용자에게만 푸시 발송. 수신자가 택시팟을 구독 중이고
+// 푸시를 켠 경우에만 실제 발송된다(Union 백엔드에서 검증). 실패는 본 요청에 영향 없음.
+async function sendUnionTargetedNotification(userId: string, title: string, message: string): Promise<void> {
+  const apiKey = process.env.UNION_API_KEY;
+  if (!apiKey) return;
+
+  try {
+    const response = await fetch(UNION_NOTIFICATION_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'X-Union-Api-Key': apiKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        targetAppId: TARGET_APP_ID,
+        title: trimForPush(title, 120),
+        body: trimForPush(message, 500),
+        category: 'MINIAPP_GENERIC',
+        deeplinkType: 'MINIAPP',
+        targetPath: '/notifications',
+        targetUserIds: [userId],
+      }),
+    });
+
+    if (!response.ok) {
+      console.error('[union-notification:error]', response.status, await response.text());
+    }
+  } catch (error) {
+    console.error('[union-notification:error]', error);
+  }
 }
 
 // This Union publisher API sends to all active subscribers of targetAppId.

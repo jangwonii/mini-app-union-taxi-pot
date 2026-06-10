@@ -37,9 +37,19 @@ CORS_ALLOWED_ORIGIN=*
 UNION_JWKS_URL=https://union-api-183092809276.asia-northeast3.run.app/.well-known/jwks.json
 UNION_ISSUER=https://union-api-183092809276.asia-northeast3.run.app
 UNION_AUDIENCE=com.union.taxi-pot
+UNION_API_KEY=...
 ```
 
 `SUPABASE_SERVICE_ROLE_KEY`는 서버 환경변수에만 둬야 합니다.
+
+## 푸시 알림
+
+참여 신청/승인/거절/취소/마감 시 인앱 알림함에 기록하면서, 동시에 Union 백엔드(`POST /api/v1/publishers/notifications`)로 **해당 사용자에게만** 타겟 푸시를 발송합니다(`targetUserIds`). 사용자 ID는 ID 토큰의 `sub` claim(Union user UUID)을 그대로 사용합니다.
+
+- `UNION_API_KEY`: Union 대시보드에서 발급한 `notifications:send` scope API 키. 서버 환경변수에만 둡니다.
+- 미설정이면 푸시는 건너뛰고 인앱 알림만 동작합니다.
+- 수신자가 택시팟을 구독 중이고 푸시를 켠 경우에만 실제 발송됩니다(Union 백엔드에서 검증).
+- 전체 구독자 공지에는 `sendUnionBroadcastNotification`을 사용합니다.
 
 ## Vercel 설정
 

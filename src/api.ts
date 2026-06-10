@@ -10,7 +10,9 @@ import type {
   UserProfile,
 } from './types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+// .env 없이 빌드돼도 상대경로('/api/...')가 네이티브 브릿지로 넘어가 "unsupported URL"이
+// 나지 않도록 프로덕션 API 주소를 fallback 으로 둔다 (.env 는 gitignore 라 clean clone 빌드에서 빠짐).
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://project-if2rm.vercel.app';
 
 interface ApiResult<T> {
   statusCode: number;
